@@ -1,20 +1,17 @@
 from __future__ import print_function
 
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, timedelta
 
 import substring as substring
 from googleapiclient import discovery
 from httplib2 import Http
 from oauth2client import file, client, tools
 
-date1 = "2020-03-31T04:37:02.727Z"
-date2 = "2020-04-04T02:02:14.059Z"
-
 DRIVE_CREATE_TIME_TEMPLATE = '%Y-%m-%dT%H:%M:%S.%fZ'
 
-debugTeamName = "SSC NAPOLI"
+debugTeamName = ""
 pageToken = None
-printDebug = True
+printDebug = False
 reviewed = dict()
 notReviewed = dict()
 notFoundPlayerVids = dict()
