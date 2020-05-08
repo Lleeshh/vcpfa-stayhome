@@ -9,13 +9,14 @@ from oauth2client import file, client, tools
 
 DRIVE_CREATE_TIME_TEMPLATE = '%Y-%m-%dT%H:%M:%S.%fZ'
 
-debugTeamName = ""
-pageToken = None
 printDebug = False
-reviewed = dict()
-notReviewed = dict()
+debugTeamName = "LIVERPOOL FC"
+pageToken = None
+reviewedVideos = dict()
+unreviewedVideos = dict()
 notFoundPlayerVids = dict()
-playerAwardedForDay = dict()        # playerName : [7] for the days
+playerPointsByDay = dict()        # playerName : [7] for the days
+playersData = dict()
 
 REVIEWED_KEYWORDS = {'reviewed', 'reviwed', 'reeviewed', 'reveiwed'}
 VIDEO_UPLOAD_ROOT_FOLDER = 'TEAMS (UPLOAD VIDS HERE)'
@@ -24,37 +25,37 @@ DRIVE_FILE_IDS_TO_SKIP = ['1T4AuX_4QB65P-JJE69yDv4_KC7s7DTFQ']
 LEVELS = {"juniors", "2010", "2009", "2008", "2007", "2006"}
 POINTS = {"juniors": 3, "2010": 3, "2009": 5, "2008": 5, "2007": 10, "2006": 10}
 
-pointsByDay = [{"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
-               {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPUR": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0}]
+teamPointsByDay = [{"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0, "BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0},
+                   {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0,"BAYERN MUNICH": 0, "TOTTENHAM HOTSPURS": 0, "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0, "MANCHESTER CITY": 0, "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0}]
 PLAYERLEVELS = {"TJ Tahid":"2007", "Evan Semple":"2007","Logan MacDonald":"2007","Zachary Zach Uppal":"2007","Anthany De Sousa":"2007","Brody Perkin":"2007","Mohamed Konneh":"2007","Tristan Otuomagie":"2007","Connor Ho":"2007","Jacob Haile":"2007","Matthew Robinson":"2007",
-                "Koben Armer-Petrie":"2008","Manav Tatla":"2007","Tony Balaj-Coroiu":"2007","Anthony":"2007","Jakob Grummisch":"2007","Trey Uppal":"2008","Shaan Uppal":"2008","Liam Ferdinandez":"2007","Joaquim Dharamsi":"2007","Alex Boardman":"2007","Francesco":"2007","Pedro":"2007",
+                "Koben Armer-Petrie":"2008","Manav Tatla":"2007","Tony Balaj-Coroiu":"2007","Anthony Balaj-Coroiu":"2007","Jakob Grummisch":"2007","Trey Uppal":"2007","Shaan Uppal":"2008","Liam Ferdinandez":"2007","Joaquim Dharamsi":"2007","Alex Boardman":"2007","Francesco":"2007","Pedro":"2007",
                 "Brady Verge":"2008","Musa Konneh":"2008","Kaleb Otuomagie":"2008","Kristian Miletic":"2008","Aidan Best":"2008","William Segal":"2008","Alessandro Sandro Troisi":"2008","Ben MacKinnon":"2008",
                 "Gurmeet Singh":"2009","Ben Blake":"2009","Lucas Clark":"2009","Mohamed Dolley":"2009","Jonas Caligiuri":"2009","Luca Pedrosa":"2009","Prabhjot Brar":"2009","Jamil Tahid":"2009","Vitor Conradt":"2009","Jonah Haile":"2009","Matteo C":"2009","Zayda":"2009","Jackson":"2009","Aiden":"2009","Jake McAdam":"2009",
-                "Louie Bellini":"2009","Luke McKie":"2009","Oliver Schlesinger":"2009","Holly Davis":"2009","Diyae Rafi":"2009","Martin Prochazka":"2009","Nahuel Santamaria":"2009","Kai Tiearney":"2009","Alistair Warren":"2009","Matthew Cornell":"2009","Matty":"2009","Stefano ":"2009","Jericho Carlos":"2009",
-                "Carter Jansen":"2010","Jared Hare":"2010","Goodluck ":"2010","Logan Black":"2010","Andrew Cornell":"2010","Kiyan Malik":"2010","Matteo Troisi":"2010","Teagan Sinclair":"2010","Ryan":"2010",
-                "Noah Bellini":"juniors","Cesare Caligiuri":"juniors","Maxim Dharamsi":"juniors","Louis Tiearney":"juniors","Leo Tiearney":"juniors","Abdulai Dolley":"juniors","Alexander Balaj-Coroiu Alex":"juniors","Daniel Bzowski":"juniors","Emerson Krishna":"juniors","Inti Santamaria":"juniors","Johnson Kengni":"juniors","Abdulai":"juniors","Avery":"juniors"}
-TEAMPLAYERS = { "CHELSEA FC":["Anthany","Aiden","Jackson","Martin","Avery"],
-                "FC BARCELONA":["Brody","Sandro","Alessandro","Jonas","Matthew Cornell", "Matty", "Cesare"],
-                "CLUB ATHLETICO DE MADRID":["Matthew Robinson","Ben MacKinnon","Jamil","Nahuel"],
-                "VALENCIA CF":["Evan","Brady","Lucas","Daniel"],
-                "BAYERN MUNICH":["Jacob","Kaleb","Luca P","Inti"],
-                "TOTTENHAM HOTSPUR":["Logan MacDonald","Jonah","Mohamed Dolley","Andrew","Johnson"],
-                "ATALANTA BC":["Mohamed Konneh","Koben","Prabhjot","Carter","Leo"],
-                "PARIS ST-GERMAIN":["TJ","Kristian","Vitor","Louis Tiearney"],
-                "OLYMPIQUE LYONNAIS":["Tristan","Musa","Alistair","Maxim"],
+                "Louie Bellini":"2009","Luke McKie":"2009","Oliver Schlesinger":"2009","Holly Davis":"2009","Diyae Rafi":"2009","Martin Prochazka":"2009","Nahuel Santamaria":"2009","Kai Tiearney":"2007","Alistair Warren":"2009","Matthew Cornell":"2009","Matty":"2009","Stefano ":"2009","Jericho Carlos":"2009",
+                "Carter Jansen":"2010","Jared Hare":"2010","Goodluck ":"2010","Logan Black":"2010","Logan B.":"2010","Andrew Cornell":"2010","Kiyan Malik":"2010","Matteo Troisi":"2010","Teagan Sinclair":"2010","Ryan":"2010",
+                "Noah Bellini":"juniors","Cesare Caligiuri":"juniors","Maxim Dharamsi":"juniors","Louis Tiearney":"juniors","Leo Tiearney":"juniors","Abdulai Dolley":"juniors","Alex Balaj-Coroiu":"juniors","Alexander Balaj-Coroiu":"juniors","Daniel Bzowski":"juniors","Emerson Krishna":"juniors","Inti Santamaria":"juniors","Johnson Kengni":"juniors","Abdulai":"juniors","Avery":"juniors"}
+TEAMPLAYERS = { "ARSENAL FC":["Joaquim","Kai", "Ryan"],
+                "ATALANTA BC":["Mohamed Konneh","Koben","Carter","Leo"],
+                "BAYERN MUNICH":["Jacob","Kaleb","Luca P","Johnson"],
+                "BORUSSIA DORTMUND":["Anthony","Jake McAdam","Ben Blake","Alexander Balaj-Coroiu","Alex Balaj-Coroiu"],
+                "CHELSEA FC":["Trey","Jackson","Martin","Avery"],
+                "CLUB ATHLETICO DE MADRID":["Matthew Robinson","Ben MacKinnon","Jamil","Matteo T"],
+                "FC BARCELONA":["Sandro","Alessandro","Jonas","Matthew Cornell", "Cesare"],
+                "JUVENTUS":["Francesco","Gurmeet","Louie Bellini","Abdulai"],
                 "LIVERPOOL FC":["Zach","Zachary","William","Kiyan","Noah Bellini"],
-                "SSC NAPOLI":["Alex Boardman","Shaan","Holly","Logan Black","Matteo T"],
-                "MANCHESTER CITY":["Jakob","Francesco","Emerson","Jericho"],
-                "ARSENAL FC":["Joaquim","Gurmeet","Matteo C","Ryan"],
-                "REAL MADRID CF":["Liam","Pedro","Kai","Zayda"],
-                "JUVENTUS":["Manav","Trey","Louie Bellini","Abdulai"],
-                "BORUSSIA DORTMUND":["Anthony","Jake McAdam","Ben Blake","Luke","Alexander Balaj-Coroiu Alex"]}
+                "MANCHESTER CITY":["Matteo C","Luke McKie","Emerson","Jericho"],
+                "OLYMPIQUE LYONNAIS":["Tristan","Musa","Alistair","Maxim"],
+                "PARIS ST-GERMAIN":["TJ","Vitor","Louis Tiearney"],
+                "REAL MADRID CF":["Liam","Pedro","Zayda"],
+                "SSC NAPOLI":["Alex Boardman","Shaan","Holly","Logan Black"],
+                "TOTTENHAM HOTSPURS":["Logan MacDonald","Jonah","Mohamed Dolley","Andrew"],
+                "VALENCIA CF":["Evan","Brady","Lucas","Daniel"]}
 
 
 # -------------------------------------------------------------------------------------------------
@@ -99,7 +100,6 @@ def getRootFolderId(drive):
 def getTeamVideoInfo(drive, teamFolderId, teamName):
     teamvids = getDriveFolderContents(drive, teamFolderId)
     for videofile in teamvids:
-        videoFileid = videofile.get('id')
         videoFileName = videofile.get('name')
         videoCreatedTime = videofile.get('createdTime')
 
@@ -107,7 +107,7 @@ def getTeamVideoInfo(drive, teamFolderId, teamName):
         createdTime = createdTimeZ - timedelta(hours=8)
 
         slashIndex = videoFileName.find("/")
-        if 0 < slashIndex <= 3:
+        if slashIndex != -1:
             fileNameDay = substring.substringByInd(videoFileName, slashIndex + 1, slashIndex + 2, 1)
             if fileNameDay[0] == '0':
                 fileNameDay = substring.substringByInd(videoFileName, slashIndex + 2, slashIndex + 2, 1)
@@ -122,18 +122,18 @@ def getTeamVideoInfo(drive, teamFolderId, teamName):
         vidName = getStrippedVideoName(videoFileName)
         if any(text in vidName for text in REVIEWED_KEYWORDS):
             # handle dupes
-            if videoFileName in reviewed:
+            if videoFileName in reviewedVideos:
                 if printDebug: print("Duplicate Video Found in Reviewed={}".format(videoFileName))
                 continue
-            reviewed[videoFileName] = [teamName, createdTime]
+            reviewedVideos[videoFileName] = [teamName, createdTime]
         else:
             # handle dupes
-            if videoFileName in notReviewed:
-                if printDebug: print("Duplicate Video Found in notReviewed={}".format(videoFileName))
+            if videoFileName in unreviewedVideos:
+                if printDebug: print("Duplicate Video Found in unreviewedVideos={}".format(videoFileName))
                 continue
-            notReviewed[videoFileName] = [teamName, createdTime]
+            unreviewedVideos[videoFileName] = [teamName, createdTime]
 
-        if printDebug: print('\tFound file: %s (%s)' % (videoFileName, videoFileid))
+        # if printDebug: print('\tFound file: %s (%s)' % (videoFileName, videoFileid))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -179,12 +179,14 @@ def determinePlayerPoints(videoName, playerName):
 
 # -------------------------------------------------------------------------------------------------
 def updatePoints(videoName, videoCreatedOn, teamName, teamPlayerList):
-    global pointsByDay
-    global playerAwardedForDay
+    global teamPointsByDay
+    global playerPointsByDay
     global debugTeamName
+    global playersData
 
+    dayIndex = 0
     if teamName == debugTeamName:
-        None
+        dayIndex = 1
 
     # Check the video against all the players in this team
     for playerName in teamPlayerList:
@@ -199,17 +201,18 @@ def updatePoints(videoName, videoCreatedOn, teamName, teamPlayerList):
         dayIndex = videoCreatedOn.isoweekday()
 
         # Did we already account for this player?  (i.e more than one video uploaded)
-        playerDays = playerAwardedForDay[playerName]
+        playerDays = playerPointsByDay[playerName]
         if playerDays[dayIndex] != 0:
             if teamName == debugTeamName:
                 print("(Already Awarded) player=[{} points={} video={}".format(playerName, points, videoName))
             return points
 
-        currentPoints = pointsByDay[dayIndex][teamName]
+        currentPoints = teamPointsByDay[dayIndex][teamName]
         newPoints = currentPoints + points
-        pointsByDay[dayIndex][teamName] = newPoints
+        teamPointsByDay[dayIndex][teamName] = newPoints
         playerDays[dayIndex] = newPoints
-        playerAwardedForDay[playerName] = playerDays
+        playerPointsByDay[playerName] = playerDays
+        playersData[videoName] = dict({teamName:{playerName: points}})
         if teamName == debugTeamName:
             print("(First Award) player={} points=[{}] video={}".format(playerName, points, videoName))
         return points
@@ -220,25 +223,26 @@ def updatePoints(videoName, videoCreatedOn, teamName, teamPlayerList):
 # -------------------------------------------------------------------------------------------------
 def calculatePointSummary():
     global notFoundPlayerVids
-    global playerAwardedForDay
+    global playerPointsByDay
+    global playersData
 
     print()
-    # reviewed is reviewed[videoFileName] = [teamFolderName, videoCreatedTime]
-    for videoName in reviewed:
-        teamName = reviewed[videoName][0]
-        videoCreatedOn = reviewed[videoName][1]
+    # reviewedVideos is reviewedVideos[videoFileName] = [teamFolderName, videoCreatedTime]
+    for videoName in reviewedVideos:
+        teamName = reviewedVideos[videoName][0]
+        videoCreatedOn = reviewedVideos[videoName][1]
 
         if teamName in TEAMPLAYERS:
             teamPlayerList = TEAMPLAYERS[teamName]
         else:
             print("Failed to get player list for team {}".format(teamName))
-            exit(3)
+            continue
 
         for player in teamPlayerList:
             days = [0] * 8
-            if player in playerAwardedForDay:
+            if player in playerPointsByDay:
                 continue
-            playerAwardedForDay[player] = days
+            playerPointsByDay[player] = days
 
         points = updatePoints(videoName, videoCreatedOn, teamName, teamPlayerList)
         if points is None:
@@ -252,9 +256,9 @@ def printDataSummary():
     print('----------------------------------------------------------------------------------------')
     print("PROGRAM STATS SUMMARY")
     print('----------------------------------------------------------------------------------------')
-    print("Total Videos: {}".format(reviewed.__len__() + notReviewed.__len__()))
-    print("Reviewed: {}".format(reviewed.__len__()))
-    print("Not Reviewed: {}".format(notReviewed.__len__()))
+    print("Total Videos: {}".format(reviewedVideos.__len__() + unreviewedVideos.__len__()))
+    print("reviewedVideos: {}".format(reviewedVideos.__len__()))
+    print("Not Reviewed: {}".format(unreviewedVideos.__len__()))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -264,13 +268,13 @@ def printNotReviewedSummary():
     print("VIDEOS PENDING REVIEW")
     print('----------------------------------------------------------------------------------------')
     longestLen = 0
-    for videoName in notReviewed:
-        length = notReviewed[videoName][0].__len__()
+    for videoName in unreviewedVideos:
+        length = unreviewedVideos[videoName][0].__len__()
         if length > longestLen:
             longestLen = length
 
-    for videoName in notReviewed:
-        teamName = notReviewed[videoName][0]
+    for videoName in unreviewedVideos:
+        teamName = unreviewedVideos[videoName][0]
         spacesCount = longestLen - teamName.__len__() + 2
         print("\t{}:{}{}".format(teamName, " "*spacesCount, videoName))
 
@@ -291,12 +295,12 @@ def printTeamDailyPointSummary():
     print('----------------------------------------------------------------------------------------')
     print("TEAM POINTS BY DAY")
     print('----------------------------------------------------------------------------------------')
-    global pointsByDay
+    global teamPointsByDay
     DAYNAMES = [None, "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     for dayIndex in range(1, 7):    # Monday (1) to Sunday (7)
         print("{} as {}".format(DAYNAMES[dayIndex], dayIndex))
 
-        dayPointsList = pointsByDay[dayIndex]
+        dayPointsList = teamPointsByDay[dayIndex]
         reviewedVideoCount = 0
         for team in dayPointsList:
             print("\t{}: {}".format(team, dayPointsList[team]))
@@ -309,12 +313,12 @@ def printTeamPointsForWeekSummary():
     print("TEAM POINTS FOR WEEK")
     print('----------------------------------------------------------------------------------------')
     results = {"CHELSEA FC": 0, "FC BARCELONA": 0, "CLUB ATHLETICO DE MADRID": 0, "VALENCIA CF": 0, "BAYERN MUNICH": 0,
-              "TOTTENHAM HOTSPUR": 0,
+              "TOTTENHAM HOTSPURS": 0,
               "ATALANTA BC": 0, "PARIS ST-GERMAIN": 0, "OLYMPIQUE LYONNAIS": 0, "LIVERPOOL FC": 0, "SSC NAPOLI": 0,
               "MANCHESTER CITY": 0,
               "ARSENAL FC": 0, "REAL MADRID CF": 0, "JUVENTUS": 0, "BORUSSIA DORTMUND": 0}
     for dayIndex in range(1, 7):  # Monday (1) to Sunday (7)
-        dayPointsList = pointsByDay[dayIndex]
+        dayPointsList = teamPointsByDay[dayIndex]
         for team in dayPointsList:
             currentPoints = results[team]
             newPoints = dayPointsList[team]
@@ -332,8 +336,8 @@ def printVideoCountPerTeam():
     print("VIDEO COUNT PER TEAM")
     print('----------------------------------------------------------------------------------------')
     s = dict()
-    for video in reviewed:
-        teamName = reviewed[video][0]
+    for video in reviewedVideos:
+        teamName = reviewedVideos[video][0]
         if teamName in s:
             s[teamName] = s[teamName] + 1
         else:
@@ -363,9 +367,9 @@ def main():
             if teamFolderName in FOLDERS_TO_SKIP or teamFolderId in DRIVE_FILE_IDS_TO_SKIP:
                 continue
 
-            if printDebug: print('Found team folder: {} ({})'.format(teamFolderName, teamFolderId))
+            # if printDebug: print('Found team folder: {} ({})'.format(teamFolderName, teamFolderId))
 
-            # populate the reviewed and notReviewed lists
+            # populate the reviewedVideos and unreviewedVideos lists
             getTeamVideoInfo(DRIVE, teamFolderId, teamFolderName)
 
         if pageToken is None:
@@ -375,7 +379,7 @@ def main():
 
     printNotReviewedSummary()
     printDataSummary()
-    if printDebug: printTeamDailyPointSummary()
+    # if printDebug: printTeamDailyPointSummary()
     printTeamPointsForWeekSummary()
     printFailedSummary()
     print()
