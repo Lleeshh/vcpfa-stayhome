@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 from datetime import datetime, timedelta
-
 import substring as substring
 from googleapiclient import discovery
 from httplib2 import Http
@@ -12,6 +11,7 @@ DRIVE_CREATE_TIME_TEMPLATE = '%Y-%m-%dT%H:%M:%S.%fZ'
 printDebug = False
 debugTeamName = "LIVERPOOL FC"
 pageToken = None
+useMaxPointsPerTeam = True
 reviewedVideos = dict()
 unreviewedVideos = dict()
 notFoundPlayerVids = dict()
@@ -40,21 +40,21 @@ PLAYERLEVELS = {"TJ Tahid":"2007", "Evan Semple":"2007","Logan MacDonald":"2007"
                 "Louie Bellini":"2009","Luke McKie":"2009","Oliver Schlesinger":"2009","Holly Davis":"2009","Diyae Rafi":"2009","Martin Prochazka":"2009","Nahuel Santamaria":"2009","Kai Tiearney":"2007","Alistair Warren":"2009","Matthew Cornell":"2009","Matty":"2009","Stefano ":"2009","Jericho Carlos":"2009",
                 "Carter Jansen":"2010","Jared Hare":"2010","Goodluck ":"2010","Logan Black":"2010","Logan B.":"2010","Andrew Cornell":"2010","Kiyan Malik":"2010","Matteo Troisi":"2010","Teagan Sinclair":"2010","Ryan":"2010",
                 "Noah Bellini":"juniors","Cesare Caligiuri":"juniors","Maxim Dharamsi":"juniors","Louis Tiearney":"juniors","Leo Tiearney":"juniors","Abdulai Dolley":"juniors","Alex Balaj-Coroiu":"juniors","Alexander Balaj-Coroiu":"juniors","Daniel Bzowski":"juniors","Emerson Krishna":"juniors","Inti Santamaria":"juniors","Johnson Kengni":"juniors","Abdulai":"juniors","Avery":"juniors"}
-TEAMPLAYERS = { "ARSENAL FC":["Joaquim","Kai", "Ryan"],
-                "ATALANTA BC":["Mohamed Konneh","Koben","Carter","Leo"],
+TEAMPLAYERS = { "ARSENAL FC":["Goodluck", "Joaquim","Kai", "Ryan"],
+                "ATALANTA BC":["Mohamed Konneh","Koben","Carter"],
                 "BAYERN MUNICH":["Jacob","Kaleb","Luca P","Johnson"],
-                "BORUSSIA DORTMUND":["Anthony","Jake McAdam","Ben Blake","Alexander Balaj-Coroiu","Alex Balaj-Coroiu"],
+                "BORUSSIA DORTMUND":["Anthony","Jake McAdam","Ben Blake","Alexander Balaj-Coroiu"],
                 "CHELSEA FC":["Trey","Jackson","Martin","Avery"],
-                "CLUB ATHLETICO DE MADRID":["Matthew Robinson","Ben MacKinnon","Jamil","Matteo T"],
-                "FC BARCELONA":["Sandro","Alessandro","Jonas","Matthew Cornell", "Cesare"],
-                "JUVENTUS":["Francesco","Gurmeet","Louie Bellini","Abdulai"],
-                "LIVERPOOL FC":["Zach","Zachary","William","Kiyan","Noah Bellini"],
-                "MANCHESTER CITY":["Matteo C","Luke McKie","Emerson","Jericho"],
+                "CLUB ATHLETICO DE MADRID":["Matthew Robinson","Ben MacKinnon","Jamil","Matthew Cornell"],
+                "FC BARCELONA":["Cesare", "Jonas", "Matthew Cornell", "Kenny Amankwa"],
+                "JUVENTUS":["Gurmeet","Louie Bellini","Abdulai"],
+                "LIVERPOOL FC":["Zachary","Kiyan","Noah Bellini"],
+                "MANCHESTER CITY":["Manav","Matteo Caligiuri","Emerson","Jericho"],
                 "OLYMPIQUE LYONNAIS":["Tristan","Musa","Alistair","Maxim"],
                 "PARIS ST-GERMAIN":["TJ","Vitor","Louis Tiearney"],
                 "REAL MADRID CF":["Liam","Pedro","Zayda"],
                 "SSC NAPOLI":["Alex Boardman","Shaan","Holly","Logan Black"],
-                "TOTTENHAM HOTSPURS":["Logan MacDonald","Jonah","Mohamed Dolley","Andrew"],
+                "TOTTENHAM HOTSPURS":["Logan MacDonald","Jonah","Mohamed Dolley","Andrew Cornell"],
                 "VALENCIA CF":["Evan","Brady","Lucas","Daniel"]}
 
 
@@ -105,19 +105,19 @@ def getTeamVideoInfo(drive, teamFolderId, teamName):
 
         createdTimeZ = datetime.strptime(videoCreatedTime, DRIVE_CREATE_TIME_TEMPLATE)
         createdTime = createdTimeZ - timedelta(hours=8)
-
-        slashIndex = videoFileName.find("/")
-        if slashIndex != -1:
-            fileNameDay = substring.substringByInd(videoFileName, slashIndex + 1, slashIndex + 2, 1)
-            if fileNameDay[0] == '0':
-                fileNameDay = substring.substringByInd(videoFileName, slashIndex + 2, slashIndex + 2, 1)
-
-            try:
-                delta = createdTime.day - int(fileNameDay)
-                if delta > 0:
-                    createdTime = createdTime - timedelta(days=delta)
-            except:
-                print("Failed on vid name parsing to adjust createdTime videoName={} created={} fileNameDay={}".format(videoFileName, createdTime, fileNameDay))
+        #
+        # slashIndex = videoFileName.find("/")
+        # if slashIndex != -1:
+        #     fileNameDay = substring.substringByInd(videoFileName, slashIndex + 1, slashIndex + 2, 1)
+        #     if fileNameDay[0] == '0':
+        #         fileNameDay = substring.substringByInd(videoFileName, slashIndex + 2, slashIndex + 2, 1)
+        #
+        #     try:
+        #         delta = createdTime.day - int(fileNameDay)
+        #         if delta > 0:
+        #             createdTime = createdTime - timedelta(days=delta)
+        #     except:
+        #         print("Failed on vid name parsing to adjust createdTime videoName={} created={} fileNameDay={}".format(videoFileName, createdTime, fileNameDay))
 
         vidName = getStrippedVideoName(videoFileName)
         if any(text in vidName for text in REVIEWED_KEYWORDS):
@@ -154,7 +154,22 @@ def getStrippedVideoName(vidName: str):
 
 
 # -------------------------------------------------------------------------------------------------
-def determinePlayerPoints(videoName, playerName):
+def determinePlayerPoints(videoName, playerName, teamName):
+    if useMaxPointsPerTeam:
+        team = TEAMPLAYERS[teamName]
+
+        points = 0
+        if len(team) == 3:
+            points = 16
+        elif len(team) == 4:
+            points = 12
+
+        if points == 0:
+            print("team {} has {} players".format(teamName, len(team)))
+            exit()
+
+        return points
+
     name = playerName
     fixedVidName = getStrippedVideoName(videoName)
     if name is not '' and name.lower() in fixedVidName:
@@ -192,7 +207,7 @@ def updatePoints(videoName, videoCreatedOn, teamName, teamPlayerList):
     for playerName in teamPlayerList:
         # for the video player combination, if this video belongs to the player
         # then they should get points
-        points = determinePlayerPoints(videoName, playerName)
+        points = determinePlayerPoints(videoName, playerName, teamName)
         if points is None:
             continue
 
