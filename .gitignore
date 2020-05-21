@@ -2,3 +2,4 @@ credentials.json
 storage.json
 *.pickle
 *.idea
+*-user*
