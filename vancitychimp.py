@@ -1,29 +1,23 @@
 from __future__ import print_function
 
 import copy
+from collections import Counter
+
 from googleapiclient import discovery
 from httplib2 import Http
 from oauth2client import file, client, tools
 
-DRIVE_CREATE_TIME_TEMPLATE = '%Y-%m-%dT%H:%M:%S.%fZ'
-
-printDebug = True
 pageToken = None
-reviewedVideos = dict()
-unreviewedVideos = dict()
-notFoundPlayerVids = list()
-playerPointsByDay = dict()        # playerName : [7] for the days
-playersData = dict()
+videosNeedFixing = dict()
+videosPendingReview = dict()
 
 REVIEWED_KEYWORDS = {'reviewed', 'reviwed', 'reeviewed', 'reveiwed'}
 VIDEO_UPLOAD_ROOT_FOLDER = 'TEAMS (UPLOAD VIDS HERE)'
-
 DAYS_OF_THE_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 TEAM_POINTS_TEMPLATE = {"ARSENAL FC": 0, "ATALANTA BC": 0, "BAYERN MUNICH": 0, "BORUSSIA DORTMUND": 0, "CHELSEA FC": 0, "CLUB ATHLETICO DE MADRID": 0, "FC BARCELONA": 0,  "JUVENTUS": 0, "LIVERPOOL FC": 0, "MANCHESTER CITY": 0, "OLYMPIQUE LYONNAIS": 0, "PARIS ST-GERMAIN": 0, "REAL MADRID CF": 0, "SSC NAPOLI": 0, "TOTTENHAM HOTSPURS": 0, "VALENCIA CF": 0}
 DAILY_TEAM_POINTS = dict()
 for day in DAYS_OF_THE_WEEK:
     DAILY_TEAM_POINTS[day] = copy.deepcopy(TEAM_POINTS_TEMPLATE)
-
 TEAMPLAYERS = {"ARSENAL FC":["Goodluck", "Joaquim","Kai"],
                "ATALANTA BC":["Mohamed Konneh","Koben","Carter"],
                "BAYERN MUNICH":["Jacob","Kaleb","Luca","Johnson"],
@@ -84,14 +78,15 @@ def getRootFolderId(drive):
 
 
 # -------------------------------------------------------------------------------------------------
-def printDataSummary():
+def printDataSummary(allVideos):
+    reviewedCount = len([vid for vid in allVideos if vid.get('reviewed')])
     print()
     print('----------------------------------------------------------------------------------------')
     print("PROGRAM STATS SUMMARY")
     print('----------------------------------------------------------------------------------------')
-    print("Total Videos: {}".format(reviewedVideos.__len__() + unreviewedVideos.__len__()))
-    print("reviewedVideos: {}".format(reviewedVideos.__len__()))
-    print("Not Reviewed: {}".format(unreviewedVideos.__len__()))
+    print("Total Videos: {}".format(len(allVideos)))
+    print("reviewedVideos: {}".format(reviewedCount))
+    print("Not Reviewed: {}".format(len(allVideos)-reviewedCount))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -101,13 +96,13 @@ def printNotReviewedSummary():
     print("VIDEOS PENDING REVIEW")
     print('----------------------------------------------------------------------------------------')
     longestLen = 0
-    for videoName in unreviewedVideos:
-        length = unreviewedVideos[videoName].__len__()
+    for videoName in videosPendingReview:
+        length = videosPendingReview[videoName].__len__()
         if length > longestLen:
             longestLen = length
 
-    for videoName in unreviewedVideos:
-        teamName = unreviewedVideos[videoName]
+    for videoName in videosPendingReview:
+        teamName = videosPendingReview[videoName]
         spacesCount = longestLen - teamName.__len__() + 2
         print("\t{}:{}{}".format(teamName, " "*spacesCount, videoName))
 
@@ -118,12 +113,12 @@ def printFailedSummary():
     print('----------------------------------------------------------------------------------------')
     print("FAILED PARSING")
     print('----------------------------------------------------------------------------------------')
-    for entry in notFoundPlayerVids:
-        print("\t{} {}".format(entry, entry))
+    for entry in videosNeedFixing:
+        print("\t{} {}".format(entry, videosNeedFixing[entry]))
 
 
 # -------------------------------------------------------------------------------------------------
-def printTeamPointsForWeekSummary():
+def printTeamPointsForWeekSummary(allVideos):
     print()
     print('----------------------------------------------------------------------------------------')
     print("TEAM POINTS FOR WEEK")
@@ -135,6 +130,17 @@ def printTeamPointsForWeekSummary():
 
     for team in weeklyResults:
         print("\t{}: {}".format(team, weeklyResults[team]))
+
+
+# -------------------------------------------------------------------------------------------------
+def printOwnersReport(allVideos):
+    print()
+    print('----------------------------------------------------------------------------------------')
+    print("Owners Report")
+    print('----------------------------------------------------------------------------------------')
+    ownerEmails = [videoDetails.get('emails') for videoDetails in allVideos]
+    ownerInfo = [email for emails in ownerEmails for email in emails]
+    print(Counter(ownerInfo))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -157,82 +163,81 @@ def determinePoints(teamName):
 
 
 # -------------------------------------------------------------------------------------------------
-def getSimpleVideoDetails(videoDict):
-    videoDetails = dict()
-    videoName = videoDict.get('name')
-    videoName = getSanitizedVideoName((videoName))
+def getSimpleVideoDetails(videoDict, teamName):
+    videoName = getSanitizedVideoName(videoDict.get('name'))
+    createdTime = videoDict.get('createdTime')
+    videoDay = getDayFromVideo(videoName)
+    player = getPlayerFromVideo(videoName, TEAMPLAYERS[teamName])
+    isReviewed = True if any(text in videoName for text in REVIEWED_KEYWORDS) else False
     owners = videoDict.get('owners')
+    ownerEmailList = [owner.get('emailAddress') for owner in owners]
 
-    if owners and len(owners) > 1:
-        print("FAILURE: Unable to handle more than one owner! {}". videoDict)
-        exit(22)
-    ownerEmail = owners[0].get('emailAddress')
+    videoDetails = {'name': videoName, 'id': videoDict.get('id'), 'player': player, 'team': teamName, 'createdTime': createdTime, 'emails': ownerEmailList, 'day': videoDay, 'reviewed' : isReviewed}
+    return videoDetails
 
-    if videoName in videoDetails:
-        print("Video {} already exists with {}, overwriting it with {}".format(videoName, videoDetails[videoName], videoDict))
 
+# -------------------------------------------------------------------------------------------------
+def updateAllPoints(videoDetails):
+    videoName = videoDetails.get('name')
+    teamName = videoDetails.get('team')
+    day = videoDetails['day']
+
+    if day is None:
+        print("no day available for {}".format(videoName))
+        return
+
+    allTeamsForDay = DAILY_TEAM_POINTS[day]
+    currentTeamPoints = allTeamsForDay[teamName]
+    points = determinePoints(teamName)
+    newPoints = currentTeamPoints + points
+    allTeamsForDay[teamName] = newPoints
+
+
+# -------------------------------------------------------------------------------------------------
+def getDayFromVideo(videoName):
     videoDay = [day for day in DAYS_OF_THE_WEEK if day in videoName]
     if videoDay and len(videoDay) == 1:
         videoDay = videoDay[0]
     else:
         videoDay = None
 
-    videoDetails = {'name': videoName, 'id': videoDict.get('id'), 'createdTime': videoDict.get('createdTime'), 'email': ownerEmail, 'day': videoDay}
-    return videoDetails
+    return videoDay
 
 
 # -------------------------------------------------------------------------------------------------
-def updateAllPoints(teamName, videoDetails):
-    teamPlayerList = TEAMPLAYERS[teamName]
-    videoName = videoDetails['name']
-
-    day = videoDetails['day']
-    if day is None:
-        return
-
-    allTeamsForDay = DAILY_TEAM_POINTS[day]
-    currentTeamPoints = allTeamsForDay[teamName]
-    for playerName in teamPlayerList:
+def getPlayerFromVideo(videoName, teamPlayers):
+    for playerName in teamPlayers:
         nameOptions = playerName.split(" ")
         for name in nameOptions:
             if name is not '' and name.lower() in videoName:
-                # Now we know the Team, Player, Day and Points
-                points = determinePoints(teamName)
-                newPoints = currentTeamPoints + points
-                allTeamsForDay[teamName] = newPoints
-                return
+                return playerName
 
-    notFoundPlayerVids.append({teamName:videoName})
-    print("FAILED to parse {} video {}".format(teamName, videoDetails))
-
-
-# -------------------------------------------------------------------------------------------------
-def populateReviewInfo(teamName, videoEntry):
-    videoName = videoEntry['name']
-
-    if any(text in videoName for text in REVIEWED_KEYWORDS):
-        # handle dupes
-        # if videoName in reviewedVideos:
-        #     if printDebug: print("Duplicate Video Found in Reviewed={}".format(videoName))
-        reviewedVideos[videoName] = teamName
-    else:
-        # handle dupes
-        # if videoName in unreviewedVideos:
-        #     if printDebug: print("Duplicate Video Found in unreviewedVideos={}".format(videoName))
-        unreviewedVideos[videoName] = teamName
+    return None
 
 
 # -------------------------------------------------------------------------------------------------
 def processTeamVideos(gDriveApi, teamFolders):
+    allVideos = list()
+    # collect
     for teamFolder in teamFolders:
         teamName = teamFolder
         teamFolderId = teamFolders[teamFolder]
         videoListing = getDriveFolderContents(gDriveApi, teamFolderId, foldersOnly=False)
 
         for videoEntry in videoListing:
-            videoDetails = getSimpleVideoDetails(videoEntry)
-            populateReviewInfo(teamName, videoDetails)
-            updateAllPoints(teamName, videoDetails)
+            videoDetails = getSimpleVideoDetails(videoEntry, teamName)
+            allVideos.append(videoDetails)
+
+    # update
+    for videoEntry in allVideos:
+        if videoEntry.get('day') is None or videoEntry.get('player') is None:
+            videosNeedFixing[videoEntry.get('name')] = videoEntry.get('team')
+        elif videoEntry.get('reviewed'):
+            updateAllPoints(videoEntry)
+        else:
+            videosPendingReview[videoEntry.get('name')] = videoEntry.get('team')
+
+    return allVideos
 
 
 # -------------------------------------------------------------------------------------------------
@@ -240,30 +245,27 @@ def main():
     global pageToken
     gdriveApi = loadDriveApi()
 
-    while True:
-        print("--------------------------------------------------------------------")
-        print("Getting VanCity Pro Stay Home Stay Safe Virtual Challenge Drive Data")
-        print("--------------------------------------------------------------------")
-        uploadVidsFolderId = getRootFolderId(gdriveApi)
-        folders = getDriveFolderContents(gdriveApi, uploadVidsFolderId)
-        teamFolderInfo = dict()
-        for folder in folders:
-            teamFolderId = folder.get('id')
-            teamFolderName = folder.get('name')
-            teamFolderInfo[teamFolderName] = teamFolderId
-            if printDebug:
-                print('Found folder: {} ({})'.format(teamFolderName, teamFolderId))
+    print("--------------------------------------------------------------------")
+    print("Getting VanCity Pro Stay Home Stay Safe Virtual Challenge Drive Data")
+    print("--------------------------------------------------------------------")
+    uploadVidsFolderId = getRootFolderId(gdriveApi)
+    folders = getDriveFolderContents(gdriveApi, uploadVidsFolderId)
+    teamFolderInfo = dict()
+    for folder in folders:
+        teamFolderId = folder.get('id')
+        teamFolderName = folder.get('name')
+        teamFolderInfo[teamFolderName] = teamFolderId
 
-        processTeamVideos(gdriveApi, teamFolderInfo)
+    allVideos = processTeamVideos(gdriveApi, teamFolderInfo)
 
-        if pageToken is None:
-            break
-        break
+    if pageToken is not None:
+        print("pageToken was not none, add paging")
 
-    printDataSummary()
+    printDataSummary(allVideos)
     printNotReviewedSummary()
     printFailedSummary()
-    printTeamPointsForWeekSummary()
+    printTeamPointsForWeekSummary(allVideos)
+    printOwnersReport(allVideos)
     print()
     print("End")
 
