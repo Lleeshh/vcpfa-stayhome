@@ -8,8 +8,6 @@ from httplib2 import Http
 from oauth2client import file, client, tools
 
 pageToken = None
-videosNeedFixing = dict()
-videosPendingReview = dict()
 
 REVIEWED_KEYWORDS = {'reviewed', 'reviwed', 'reeviewed', 'reveiwed'}
 VIDEO_UPLOAD_ROOT_FOLDER = 'TEAMS (UPLOAD VIDS HERE)'
@@ -90,31 +88,31 @@ def printDataSummary(allVideos):
 
 
 # -------------------------------------------------------------------------------------------------
-def printNotReviewedSummary():
+def printNotReviewedSummary(videos):
     print()
     print('----------------------------------------------------------------------------------------')
     print("VIDEOS PENDING REVIEW")
     print('----------------------------------------------------------------------------------------')
     longestLen = 0
-    for videoName in videosPendingReview:
-        length = videosPendingReview[videoName].__len__()
+    for videoName in videos:
+        length = len(videos[videoName])
         if length > longestLen:
             longestLen = length
 
-    for videoName in videosPendingReview:
-        teamName = videosPendingReview[videoName]
-        spacesCount = longestLen - teamName.__len__() + 2
+    for videoName in videos:
+        teamName = videos[videoName]
+        spacesCount = longestLen - len(teamName) + 2
         print("\t{}:{}{}".format(teamName, " "*spacesCount, videoName))
 
 
 # -------------------------------------------------------------------------------------------------
-def printFailedSummary():
+def printFailedSummary(videos):
     print()
     print('----------------------------------------------------------------------------------------')
     print("FAILED PARSING")
     print('----------------------------------------------------------------------------------------')
-    for entry in videosNeedFixing:
-        print("\t{} {}".format(entry, videosNeedFixing[entry]))
+    for entry in videos:
+        print("\t{} {}".format(entry, videos[entry]))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -141,6 +139,8 @@ def printOwnersReport(allVideos):
     ownerEmails = [videoDetails.get('emails') for videoDetails in allVideos]
     ownerInfo = [email for emails in ownerEmails for email in emails]
     print(Counter(ownerInfo))
+    print()
+    print(','.join(set(ownerInfo)))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def determinePoints(teamName):
 
 
 # -------------------------------------------------------------------------------------------------
-def getSimpleVideoDetails(videoDict, teamName):
+def collectVideoDetails(videoDict, teamName):
     videoName = getSanitizedVideoName(videoDict.get('name'))
     createdTime = videoDict.get('createdTime')
     videoDay = getDayFromVideo(videoName)
@@ -218,24 +218,13 @@ def getPlayerFromVideo(videoName, teamPlayers):
 # -------------------------------------------------------------------------------------------------
 def processTeamVideos(gDriveApi, teamFolders):
     allVideos = list()
-    # collect
     for teamFolder in teamFolders:
         teamName = teamFolder
         teamFolderId = teamFolders[teamFolder]
         videoListing = getDriveFolderContents(gDriveApi, teamFolderId, foldersOnly=False)
 
         for videoEntry in videoListing:
-            videoDetails = getSimpleVideoDetails(videoEntry, teamName)
-            allVideos.append(videoDetails)
-
-    # update
-    for videoEntry in allVideos:
-        if videoEntry.get('day') is None or videoEntry.get('player') is None:
-            videosNeedFixing[videoEntry.get('name')] = videoEntry.get('team')
-        elif videoEntry.get('reviewed'):
-            updateAllPoints(videoEntry)
-        else:
-            videosPendingReview[videoEntry.get('name')] = videoEntry.get('team')
+            allVideos.append(collectVideoDetails(videoEntry, teamName))
 
     return allVideos
 
@@ -248,22 +237,33 @@ def main():
     print("--------------------------------------------------------------------")
     print("Getting VanCity Pro Stay Home Stay Safe Virtual Challenge Drive Data")
     print("--------------------------------------------------------------------")
-    uploadVidsFolderId = getRootFolderId(gdriveApi)
-    folders = getDriveFolderContents(gdriveApi, uploadVidsFolderId)
+    folders = getDriveFolderContents(gdriveApi, getRootFolderId(gdriveApi))
     teamFolderInfo = dict()
     for folder in folders:
         teamFolderId = folder.get('id')
         teamFolderName = folder.get('name')
         teamFolderInfo[teamFolderName] = teamFolderId
 
+    # collect
     allVideos = processTeamVideos(gdriveApi, teamFolderInfo)
+
+    # update
+    videosNeedFixing = dict()
+    videosPendingReview = dict()
+    for videoEntry in allVideos:
+        if videoEntry.get('day') is None or videoEntry.get('player') is None:
+            videosNeedFixing[videoEntry.get('name')] = videoEntry.get('team')
+        elif videoEntry.get('reviewed'):
+            updateAllPoints(videoEntry)
+        else:
+            videosPendingReview[videoEntry.get('name')] = videoEntry.get('team')
 
     if pageToken is not None:
         print("pageToken was not none, add paging")
 
     printDataSummary(allVideos)
-    printNotReviewedSummary()
-    printFailedSummary()
+    printNotReviewedSummary(videosPendingReview)
+    printFailedSummary(videosNeedFixing)
     printTeamPointsForWeekSummary(allVideos)
     printOwnersReport(allVideos)
     print()
