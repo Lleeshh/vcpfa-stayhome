@@ -1,14 +1,15 @@
-from __future__ import print_function
-
+import datetime
 import copy
-from collections import Counter
 
 from googleapiclient import discovery
 from httplib2 import Http
 from oauth2client import file, client, tools
 
+from report import createReport
+
 pageToken = None
 
+WEEK_1_START_DATE = '2020-03-30'
 REVIEWED_KEYWORDS = {'reviewed', 'reviwed', 'reeviewed', 'reveiwed'}
 VIDEO_UPLOAD_ROOT_FOLDER = 'TEAMS (UPLOAD VIDS HERE)'
 DAYS_OF_THE_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -17,7 +18,7 @@ DAILY_TEAM_POINTS = dict()
 for day in DAYS_OF_THE_WEEK:
     DAILY_TEAM_POINTS[day] = copy.deepcopy(TEAM_POINTS_TEMPLATE)
 TEAMPLAYERS = {"ARSENAL FC":["Goodluck", "Joaquim","Kai"],
-               "ATALANTA BC":["Mohamed Konneh","Koben","Carter"],
+               "ATALANTA BC":["Mohamed Konneh","Koben","Carter","Brody"],
                "BAYERN MUNICH":["Jacob","Kaleb","Luca","Johnson"],
                "BORUSSIA DORTMUND":["Anthony","Jake McAdam","Ben Blake","Alexander Balaj-Coroiu"],
                "CHELSEA FC":["Trey","Jackson","Martin","Avery"],
@@ -83,8 +84,8 @@ def printDataSummary(allVideos):
     print("PROGRAM STATS SUMMARY")
     print('----------------------------------------------------------------------------------------')
     print("Total Videos: {}".format(len(allVideos)))
-    print("reviewedVideos: {}".format(reviewedCount))
-    print("Not Reviewed: {}".format(len(allVideos)-reviewedCount))
+    print("Totals Reviewed: {}".format(reviewedCount))
+    print("Total Unreviewed: {}".format(len(allVideos)-reviewedCount))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -124,23 +125,48 @@ def printTeamPointsForWeekSummary(allVideos):
     weeklyResults = TEAM_POINTS_TEMPLATE
     for teamsDay in DAILY_TEAM_POINTS:
         for team in DAILY_TEAM_POINTS[teamsDay]:
-             weeklyResults[team] += DAILY_TEAM_POINTS[teamsDay][team]
+            weeklyResults[team] += DAILY_TEAM_POINTS[teamsDay][team]
 
     for team in weeklyResults:
         print("\t{}: {}".format(team, weeklyResults[team]))
 
 
 # -------------------------------------------------------------------------------------------------
-def printOwnersReport(allVideos):
-    print()
-    print('----------------------------------------------------------------------------------------')
-    print("Owners Report")
-    print('----------------------------------------------------------------------------------------')
-    ownerEmails = [videoDetails.get('emails') for videoDetails in allVideos]
-    ownerInfo = [email for emails in ownerEmails for email in emails]
-    print(Counter(ownerInfo))
-    print()
-    print(','.join(set(ownerInfo)))
+def printSummary(allVideos, failedParsingVideos):
+    printDataSummary(allVideos)
+    printTeamPointsForWeekSummary(allVideos)
+    printFailedSummary(failedParsingVideos)
+
+
+# -------------------------------------------------------------------------------------------------
+def getChimpList(allVideos):
+    chimpList = []
+    chimpDays = ['monday', 'wednesday', 'friday']
+    for video in allVideos:
+        day = video.get('day')
+        createdTime = video.get('createdTime')
+        reviewed = video.get('reviewed')
+
+        datetimeObjCreateTime = datetime.datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ')  # '2020-05-30T03:41:25.012Z'
+        pacificCreateTime = datetimeObjCreateTime - datetime.timedelta(hours=7)
+        createdDayOfWeek = DAYS_OF_THE_WEEK[pacificCreateTime.weekday()]
+
+        if day and (day.lower() == createdDayOfWeek.lower()):
+            if day in chimpDays:
+                if reviewed:
+                    chimpList.append(video)
+
+    return chimpList
+
+
+# -------------------------------------------------------------------------------------------------
+def getWeekNumber():
+    week1StartDate = datetime.datetime.strptime(WEEK_1_START_DATE, '%Y-%m-%d')  # '2020-05-30'
+    now = datetime.datetime.now()
+    start = (week1StartDate - datetime.timedelta(days=week1StartDate.weekday()))
+    current = (now - datetime.timedelta(days=now.weekday()))
+    weekNumber = (current - start).days / 7 + 1
+    return int(weekNumber)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -235,7 +261,7 @@ def main():
     gdriveApi = loadDriveApi()
 
     print("--------------------------------------------------------------------")
-    print("Getting VanCity Pro Stay Home Stay Safe Virtual Challenge Drive Data")
+    print("VanCity Pro Stay Home Stay Safe Challenge Drive Data for Week {}".format(getWeekNumber()))
     print("--------------------------------------------------------------------")
     folders = getDriveFolderContents(gdriveApi, getRootFolderId(gdriveApi))
     teamFolderInfo = dict()
@@ -261,11 +287,10 @@ def main():
     if pageToken is not None:
         print("pageToken was not none, add paging")
 
-    printDataSummary(allVideos)
-    printNotReviewedSummary(videosPendingReview)
-    printFailedSummary(videosNeedFixing)
-    printTeamPointsForWeekSummary(allVideos)
-    printOwnersReport(allVideos)
+    # summarize
+    printSummary(allVideos, videosNeedFixing)
+    createReport(allVideos, getChimpList(allVideos), videosPendingReview, videosNeedFixing, getWeekNumber())
+
     print()
     print("End")
 
@@ -273,4 +298,3 @@ def main():
 # -------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
-
