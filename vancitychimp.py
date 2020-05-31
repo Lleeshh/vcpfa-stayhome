@@ -1,11 +1,12 @@
 import datetime
 import copy
+import time
 
 from googleapiclient import discovery
 from httplib2 import Http
 from oauth2client import file, client, tools
 
-from report import createReport
+from report import createReport, printDataSummary, printFailedSummary
 
 pageToken = None
 
@@ -13,26 +14,28 @@ WEEK_1_START_DATE = '2020-03-30'
 REVIEWED_KEYWORDS = {'reviewed', 'reviwed', 'reeviewed', 'reveiwed'}
 VIDEO_UPLOAD_ROOT_FOLDER = 'TEAMS (UPLOAD VIDS HERE)'
 DAYS_OF_THE_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-TEAM_POINTS_TEMPLATE = {"ARSENAL FC": 0, "ATALANTA BC": 0, "BAYERN MUNICH": 0, "BORUSSIA DORTMUND": 0, "CHELSEA FC": 0, "CLUB ATHLETICO DE MADRID": 0, "FC BARCELONA": 0,  "JUVENTUS": 0, "LIVERPOOL FC": 0, "MANCHESTER CITY": 0, "OLYMPIQUE LYONNAIS": 0, "PARIS ST-GERMAIN": 0, "REAL MADRID CF": 0, "SSC NAPOLI": 0, "TOTTENHAM HOTSPURS": 0, "VALENCIA CF": 0}
+TEAM_POINTS_TEMPLATE = {"ARSENAL FC": 0, "ATALANTA BC": 0, "BAYERN MUNICH": 0, "BORUSSIA DORTMUND": 0, "CHELSEA FC": 0, "CLUB ATHLETICO DE MADRID": 0, "FC BARCELONA": 0,
+                        "JUVENTUS": 0, "LIVERPOOL FC": 0, "MANCHESTER CITY": 0, "OLYMPIQUE LYONNAIS": 0, "PARIS ST-GERMAIN": 0, "REAL MADRID CF": 0, "SSC NAPOLI": 0,
+                        "TOTTENHAM HOTSPURS": 0, "VALENCIA CF": 0}
 DAILY_TEAM_POINTS = dict()
 for day in DAYS_OF_THE_WEEK:
     DAILY_TEAM_POINTS[day] = copy.deepcopy(TEAM_POINTS_TEMPLATE)
-TEAMPLAYERS = {"ARSENAL FC":["Goodluck", "Joaquim","Kai"],
-               "ATALANTA BC":["Mohamed Konneh","Koben","Carter","Brody"],
-               "BAYERN MUNICH":["Jacob","Kaleb","Luca","Johnson"],
-               "BORUSSIA DORTMUND":["Anthony","Jake McAdam","Ben Blake","Alexander Balaj-Coroiu"],
-               "CHELSEA FC":["Trey","Jackson","Martin","Avery"],
-               "CLUB ATHLETICO DE MADRID":["Matthew Robinson","Ben MacKinnon","Jamil","Clinton Edom"],
+TEAMPLAYERS = {"ARSENAL FC":["Goodluck", "Joaquim", "Kai"],
+               "ATALANTA BC":["Mohamed Konneh", "Koben", "Carter", "Brody"],
+               "BAYERN MUNICH":["Jacob", "Kaleb", "Luca", "Johnson"],
+               "BORUSSIA DORTMUND":["Anthony", "Jake McAdam", "Ben Blake", "Alexander Balaj-Coroiu"],
+               "CHELSEA FC":["Trey", "Jackson", "Martin", "Avery"],
+               "CLUB ATHLETICO DE MADRID":["Matthew Robinson", "Ben MacKinnon", "Jamil", "Clinton Edom"],
                "FC BARCELONA":["Cesare", "Jonas", "Matthew Cornell", "Kenny Amankwa"],
-               "JUVENTUS":["Gurmeet","Louie Bellini","Abdulai"],
-               "LIVERPOOL FC":["Zachary","Kiyan","Noah Bellini"],
-               "MANCHESTER CITY":["Manav","Matteo Caligiuri","Emerson","Jericho"],
-               "OLYMPIQUE LYONNAIS":["Tristan","Musa","Alistair","Maxim"],
-               "PARIS ST-GERMAIN":["TJ","Vitor","Louis"],
-               "REAL MADRID CF":["Liam","Pedro","Zayda"],
-               "SSC NAPOLI":["Alex Boardman","Shaan","Holly","Logan Black"],
-               "TOTTENHAM HOTSPURS":["Logan MacDonald","Jonah","Mohamed Dolley","Andrew Cornell"],
-               "VALENCIA CF":["Evan","Brady","Lucas","Daniel"]}
+               "JUVENTUS":["Gurmeet", "Louie Bellini", "Abdulai"],
+               "LIVERPOOL FC":["Zachary", "Kiyan", "Noah Bellini"],
+               "MANCHESTER CITY":["Manav", "Matteo Caligiuri", "Emerson", "Jericho"],
+               "OLYMPIQUE LYONNAIS":["Tristan", "Musa", "Alistair", "Maxim"],
+               "PARIS ST-GERMAIN":["TJ", "Vitor", "Louis"],
+               "REAL MADRID CF":["Liam", "Pedro", "Zayda"],
+               "SSC NAPOLI":["Alex Boardman", "Shaan", "Holly", "Logan Black"],
+               "TOTTENHAM HOTSPURS":["Logan MacDonald", "Jonah", "Mohamed Dolley", "Andrew Cornell"],
+               "VALENCIA CF":["Evan", "Brady", "Lucas", "Daniel"]}
 
 
 # -------------------------------------------------------------------------------------------------
@@ -77,64 +80,10 @@ def getRootFolderId(drive):
 
 
 # -------------------------------------------------------------------------------------------------
-def printDataSummary(allVideos):
-    reviewedCount = len([vid for vid in allVideos if vid.get('reviewed')])
-    print()
-    print('----------------------------------------------------------------------------------------')
-    print("PROGRAM STATS SUMMARY")
-    print('----------------------------------------------------------------------------------------')
-    print("Total Videos: {}".format(len(allVideos)))
-    print("Totals Reviewed: {}".format(reviewedCount))
-    print("Total Unreviewed: {}".format(len(allVideos)-reviewedCount))
-
-
-# -------------------------------------------------------------------------------------------------
-def printNotReviewedSummary(videos):
-    print()
-    print('----------------------------------------------------------------------------------------')
-    print("VIDEOS PENDING REVIEW")
-    print('----------------------------------------------------------------------------------------')
-    longestLen = 0
-    for videoName in videos:
-        length = len(videos[videoName])
-        if length > longestLen:
-            longestLen = length
-
-    for videoName in videos:
-        teamName = videos[videoName]
-        spacesCount = longestLen - len(teamName) + 2
-        print("\t{}:{}{}".format(teamName, " "*spacesCount, videoName))
-
-
-# -------------------------------------------------------------------------------------------------
-def printFailedSummary(videos):
-    print()
-    print('----------------------------------------------------------------------------------------')
-    print("FAILED PARSING")
-    print('----------------------------------------------------------------------------------------')
-    for entry in videos:
-        print("\t{} {}".format(entry, videos[entry]))
-
-
-# -------------------------------------------------------------------------------------------------
-def printTeamPointsForWeekSummary(allVideos):
-    print()
-    print('----------------------------------------------------------------------------------------')
-    print("TEAM POINTS FOR WEEK")
-    print('----------------------------------------------------------------------------------------')
-    weeklyResults = TEAM_POINTS_TEMPLATE
-    for teamsDay in DAILY_TEAM_POINTS:
-        for team in DAILY_TEAM_POINTS[teamsDay]:
-            weeklyResults[team] += DAILY_TEAM_POINTS[teamsDay][team]
-
-    for team in weeklyResults:
-        print("\t{}: {}".format(team, weeklyResults[team]))
-
-
-# -------------------------------------------------------------------------------------------------
 def printSummary(allVideos, failedParsingVideos):
+    # This no longer works because of bonus days and off days are not reviewed but still awarded
+    # printTeamPointsForWeekSummary(TEAM_POINTS_TEMPLATE, DAILY_TEAM_POINTS)
     printDataSummary(allVideos)
-    printTeamPointsForWeekSummary(allVideos)
     printFailedSummary(failedParsingVideos)
 
 
@@ -143,16 +92,17 @@ def getChimpList(allVideos):
     chimpList = []
     chimpDays = ['monday', 'wednesday', 'friday']
     for video in allVideos:
-        day = video.get('day')
+        videoDay = video.get('day')
         createdTime = video.get('createdTime')
         reviewed = video.get('reviewed')
 
+        dstHours = 7 if time.localtime().tm_isdst else 8
         datetimeObjCreateTime = datetime.datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ')  # '2020-05-30T03:41:25.012Z'
-        pacificCreateTime = datetimeObjCreateTime - datetime.timedelta(hours=7)
+        pacificCreateTime = datetimeObjCreateTime - datetime.timedelta(hours=dstHours)  # go to pacific time from UTC
         createdDayOfWeek = DAYS_OF_THE_WEEK[pacificCreateTime.weekday()]
 
-        if day and (day.lower() == createdDayOfWeek.lower()):
-            if day in chimpDays:
+        if videoDay and (videoDay.lower() == createdDayOfWeek.lower()):
+            if videoDay in chimpDays:
                 if reviewed:
                     chimpList.append(video)
 
@@ -198,7 +148,8 @@ def collectVideoDetails(videoDict, teamName):
     owners = videoDict.get('owners')
     ownerEmailList = [owner.get('emailAddress') for owner in owners]
 
-    videoDetails = {'name': videoName, 'id': videoDict.get('id'), 'player': player, 'team': teamName, 'createdTime': createdTime, 'emails': ownerEmailList, 'day': videoDay, 'reviewed' : isReviewed}
+    videoDetails = {'name': videoName, 'id': videoDict.get('id'), 'player': player, 'team': teamName,
+                    'createdTime': createdTime, 'emails': ownerEmailList, 'day': videoDay, 'reviewed': isReviewed}
     return videoDetails
 
 
@@ -206,13 +157,13 @@ def collectVideoDetails(videoDict, teamName):
 def updateAllPoints(videoDetails):
     videoName = videoDetails.get('name')
     teamName = videoDetails.get('team')
-    day = videoDetails['day']
+    videoDay = videoDetails['day']
 
-    if day is None:
+    if videoDay is None:
         print("no day available for {}".format(videoName))
         return
 
-    allTeamsForDay = DAILY_TEAM_POINTS[day]
+    allTeamsForDay = DAILY_TEAM_POINTS[videoDay]
     currentTeamPoints = allTeamsForDay[teamName]
     points = determinePoints(teamName)
     newPoints = currentTeamPoints + points
@@ -221,7 +172,7 @@ def updateAllPoints(videoDetails):
 
 # -------------------------------------------------------------------------------------------------
 def getDayFromVideo(videoName):
-    videoDay = [day for day in DAYS_OF_THE_WEEK if day in videoName]
+    videoDay = [weekDay for weekDay in DAYS_OF_THE_WEEK if weekDay in videoName]
     if videoDay and len(videoDay) == 1:
         videoDay = videoDay[0]
     else:
@@ -289,7 +240,7 @@ def main():
 
     # summarize
     printSummary(allVideos, videosNeedFixing)
-    createReport(allVideos, getChimpList(allVideos), videosPendingReview, videosNeedFixing, getWeekNumber())
+    createReport(allVideos, getChimpList(allVideos), videosPendingReview, videosNeedFixing, getWeekNumber(), DAYS_OF_THE_WEEK, DAILY_TEAM_POINTS)
 
     print()
     print("End")
