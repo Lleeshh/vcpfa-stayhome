@@ -254,11 +254,6 @@ def createReport(allVideos, chimpList, videosPendingReview, videosNeedFixing, we
     sheet = workbook[sheetName]
     writeFailedParsing(sheet, videosNeedFixing)
 
-    sheetName = 'All CHIMP Videos'
-    workbook.create_sheet(sheetName)
-    sheet = workbook[sheetName]
-    writeDataExcel(sheet, chimpList)
-
     sheetName = 'CHIMP Awards'
     workbook.create_sheet(sheetName)
     sheet = workbook[sheetName]

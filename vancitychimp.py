@@ -89,21 +89,34 @@ def printSummary(allVideos, failedParsingVideos):
 
 # -------------------------------------------------------------------------------------------------
 def getChimpList(allVideos):
+    eligibilityTracker = dict()
     chimpList = []
     chimpDays = ['monday', 'wednesday', 'friday']
     for video in allVideos:
         videoDay = video.get('day')
         createdTime = video.get('createdTime')
-        reviewed = video.get('reviewed')
+        player = video.get('player')
+        team = video.get('team')
+        playerKey = '{}-{}'.format(player,team)
 
         dstHours = 7 if time.localtime().tm_isdst else 8
         datetimeObjCreateTime = datetime.datetime.strptime(createdTime, '%Y-%m-%dT%H:%M:%S.%fZ')  # '2020-05-30T03:41:25.012Z'
         pacificCreateTime = datetimeObjCreateTime - datetime.timedelta(hours=dstHours)  # go to pacific time from UTC
         createdDayOfWeek = DAYS_OF_THE_WEEK[pacificCreateTime.weekday()]
 
-        if videoDay and (videoDay.lower() == createdDayOfWeek.lower()):
-            if videoDay in chimpDays:
-                if reviewed:
+        if not videoDay:
+            continue
+
+        # if the video is one of the eligible days
+        if videoDay in chimpDays:
+            # and the player played all of the eligible days
+            if playerKey not in eligibilityTracker:
+                eligibilityTracker[playerKey] = {videoDay}
+            else:
+                videoDays = eligibilityTracker[playerKey]
+                videoDays.add(videoDay)
+
+                if len(videoDays) == 3:
                     chimpList.append(video)
 
     return chimpList
